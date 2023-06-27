@@ -22,7 +22,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--hf_model", type=str, default="decapoda-research/llama-7b-hf", help="Hugging Face model")
+parser.add_argument("--hf_user", type=str, default="decapoda-research", help="Hugging Face user")
+parser.add_argument("--hf_model", type=str, default="llama-7b-hf", help="Hugging Face model")
+parser.add_argument("--no_use_fast", action="store_false", help="If set, do not use fast tokenizer")
 parser.add_argument("--add_eos_token", action="store_true", help="If set, adds an end-of-sentence token to each input sentence.")
 parser.add_argument("--add_bos_token", action="store_true", help="If set, adds a beginning-of-sentence token to each input sentence.")
 parser.add_argument("--micro_batch_size", type=int, help="Micro batch size")
@@ -43,6 +45,7 @@ parser.add_argument("--output_dir", type=str, default="checkpoints", help="Outpu
 
 args = parser.parse_args()
 
+hf_model = "%s/%s" % (args.hf_user, args.hf_model)
 target_modules = args.target_modules.split(',')
 output_dir = args.output_dir
 gradient_acc_steps = args.batch_size // args.micro_batch_size
@@ -64,15 +67,17 @@ if ddp:
     gradient_acc_steps = gradient_acc_steps // world_size
 
 model = LlamaForCausalLM.from_pretrained(
-    args.hf_model,
+    hf_model,
     load_in_8bit=True,
     device_map=device_map,
 )
 total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
-    args.hf_model,
-    add_eos_token=args.add_eos_token
+    hf_model,
+    add_eos_token=args.add_eos_token,
+    add_bos_token=args.add_bos_token,
+    use_fast=(not args.no_use_fast)
 )
 
 model = prepare_model_for_int8_training(model)
