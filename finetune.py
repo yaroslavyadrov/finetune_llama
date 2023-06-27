@@ -18,37 +18,40 @@ from peft import (
 
 
 # Parameters
-MICRO_BATCH_SIZE = int(sys.argv[2])
-BATCH_SIZE = 64
-size = sys.argv[1]
-GRADIENT_ACCUMULATION_STEPS = BATCH_SIZE // MICRO_BATCH_SIZE
-EPOCHS = 1
-LEARNING_RATE = float(sys.argv[3])
-CUTOFF_LEN = 512
-LORA_R = 8
-LORA_ALPHA = 16
-LORA_DROPOUT = 0.05
-VAL_SET_SIZE = 2000
-TARGET_MODULES = [
-    "q_proj",
-    "k_proj",
-    "v_proj",
-    "down_proj",
-    "gate_proj",
-    "up_proj",
-]
-DATA_PATH = "data/data_tmp.json"
-OUTPUT_DIR = "checkpoints/{}".format(size)
+import argparse
 
-if not os.path.exists("data"):
-    os.makedirs("data")
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--micro_batch_size", type=int, help="Micro batch size")
+parser.add_argument("--size", type=str, help="Model size")
+parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
+parser.add_argument("--epochs", type=int, default=3, help="Number of epochs")
+parser.add_argument("--save_steps", type=int, default=100, help="Number of steps between checkpoint saves")
+parser.add_argument("--eval_steps", type=int, default=100, help="Number of steps between evaluation set tests")
+parser.add_argument("--learning_rate", type=float, help="Learning rate")
+parser.add_argument("--cutoff_len", type=int, default=512, help="Cutoff length")
+parser.add_argument("--lora_r", type=int, default=8, help="LoRA R value")
+parser.add_argument("--lora_alpha", type=int, default=16, help="LoRA alpha value")
+parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout value")
+parser.add_argument("--val_set_size", type=int, default=2000, help="Validation set size")
+parser.add_argument("--target_modules", type=str, default="q_proj,k_proj,v_proj,down_proj,gate_proj,up_proj", help="Target modules")
+parser.add_argument("--data_path", type=str, default="data/data_tmp.json", help="Data path")
+parser.add_argument("--data_files", type=str, default="alpaca,stackoverflow,quora", help="Data files")
+parser.add_argument("--output_dir", type=str, default="checkpoints", help="Output directory path")
+
+args = parser.parse_args()
+
+target_modules = args.target_modules.split(',')
+output_dir = args.output_dir
+gradient_acc_steps = args.batch_size // args.micro_batch_size
+
 # Load data
 data = []
-for x in sys.argv[4].split(","):
+for x in args.data_files.split(","):
     data += json.load(open("data/{}_chat_data.json".format(x)))
 random.shuffle(data)
-json.dump(data, open(DATA_PATH, "w"))
-data = load_dataset("json", data_files=DATA_PATH)
+json.dump(data, open(args.data_path, "w"))
+data = load_dataset("json", data_files=args.data_path)
 
 # Load Model
 device_map = "auto"
@@ -56,30 +59,30 @@ world_size = int(os.environ.get("WORLD_SIZE", 1))
 ddp = world_size != 1
 if ddp:
     device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
-    GRADIENT_ACCUMULATION_STEPS = GRADIENT_ACCUMULATION_STEPS // world_size
+    gradient_acc_steps = gradient_acc_steps // world_size
 
 model = LlamaForCausalLM.from_pretrained(
-    "decapoda-research/llama-{}-hf".format(size),
+    "decapoda-research/llama-{}-hf".format(args.size),
     load_in_8bit=True,
     device_map=device_map,
 )
 total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
-    "decapoda-research/llama-{}-hf".format(size), add_eos_token=True
+    "decapoda-research/llama-{}-hf".format(args.size), add_eos_token=True
 )
 
 model = prepare_model_for_int8_training(model)
 
 config = LoraConfig(
-    r=LORA_R,
-    lora_alpha=LORA_ALPHA,
-    target_modules=TARGET_MODULES,
-    lora_dropout=LORA_DROPOUT,
+    r=args.lora_r,
+    lora_alpha=args.lora_alpha,
+    target_modules=target_modules,
+    lora_dropout=args.lora_dropout,
     bias="none",
     task_type="CAUSAL_LM",
 )
-config.save_pretrained(OUTPUT_DIR)
+config.save_pretrained(output_dir)
 
 model = get_peft_model(model, config)
 tokenizer.pad_token_id = 0
@@ -105,7 +108,7 @@ def tokenize(prompt):
     result = tokenizer(
         prompt,
         truncation=True,
-        max_length=CUTOFF_LEN + 1,
+        max_length=args.cutoff_len + 1,
         padding="max_length",
     )
     return {
@@ -119,9 +122,9 @@ def generate_and_tokenize_prompt(data_point):
     return tokenize(prompt)
 
 
-if VAL_SET_SIZE > 0:
+if args.val_set_size > 0:
     train_val = data["train"].train_test_split(
-        test_size=VAL_SET_SIZE, shuffle=True, seed=42
+        test_size=args.val_set_size, shuffle=True, seed=42
     )
     train_data = train_val["train"].shuffle().map(generate_and_tokenize_prompt)
     val_data = train_val["test"].shuffle().map(generate_and_tokenize_prompt)
@@ -136,21 +139,21 @@ trainer = transformers.Trainer(
     train_dataset=train_data,
     eval_dataset=val_data,
     args=transformers.TrainingArguments(
-        per_device_train_batch_size=MICRO_BATCH_SIZE,
-        per_device_eval_batch_size=MICRO_BATCH_SIZE,
-        gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
+        per_device_train_batch_size=args.micro_batch_size,
+        per_device_eval_batch_size=args.micro_batch_size,
+        gradient_accumulation_steps=gradient_acc_steps,
         warmup_steps=100,
-        num_train_epochs=EPOCHS,
-        learning_rate=LEARNING_RATE,
+        num_train_epochs=args.epochs,
+        learning_rate=args.learning_rate,
         fp16=True,
         logging_steps=20,
-        evaluation_strategy="steps" if VAL_SET_SIZE > 0 else "no",
+        evaluation_strategy="steps" if args.val_set_size > 0 else "no",
         save_strategy="steps",
-        eval_steps=200 if VAL_SET_SIZE > 0 else None,
-        save_steps=200,
-        output_dir=OUTPUT_DIR,
+        eval_steps=args.eval_steps if args.val_set_size > 0 else None,
+        save_steps=args.save_steps,
+        output_dir=output_dir,
         save_total_limit=100,
-        load_best_model_at_end=True if VAL_SET_SIZE > 0 else False,
+        load_best_model_at_end=True if args.val_set_size > 0 else False,
         ddp_find_unused_parameters=False if ddp else None,
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
