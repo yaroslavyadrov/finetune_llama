@@ -22,8 +22,10 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
+parser.add_argument("--hf_model", type=str, default="decapoda-research/llama-7b-hf", help="Hugging Face model")
+parser.add_argument("--add_eos_token", action="store_true", help="If set, adds an end-of-sentence token to each input sentence.")
+parser.add_argument("--add_bos_token", action="store_true", help="If set, adds a beginning-of-sentence token to each input sentence.")
 parser.add_argument("--micro_batch_size", type=int, help="Micro batch size")
-parser.add_argument("--size", type=str, help="Model size")
 parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
 parser.add_argument("--epochs", type=int, default=3, help="Number of epochs")
 parser.add_argument("--save_steps", type=int, default=100, help="Number of steps between checkpoint saves")
@@ -62,14 +64,15 @@ if ddp:
     gradient_acc_steps = gradient_acc_steps // world_size
 
 model = LlamaForCausalLM.from_pretrained(
-    "decapoda-research/llama-{}-hf".format(args.size),
+    args.hf_model,
     load_in_8bit=True,
     device_map=device_map,
 )
 total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
-    "decapoda-research/llama-{}-hf".format(args.size), add_eos_token=True
+    args.hf_model,
+    add_eos_token=args.add_eos_token
 )
 
 model = prepare_model_for_int8_training(model)
