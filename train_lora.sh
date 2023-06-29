@@ -10,11 +10,9 @@ LORA_CHKPTS="$BASE_MODEL-$DATA-$RUN"
 CUDA_VISIBLE_DEVICES=0 python finetune.py \
   --hf_user $HF_USER \
   --hf_model $BASE_MODEL \
-  --no_use_fast \
-  --add_eos_token \
   --micro_batch_size 16 \
   --batch_size 64 \
-  --epochs 1 \
+  --epochs 2 \
   --save_steps 20 \
   --eval_steps 20 \
   --learning_rate 0.0002 \

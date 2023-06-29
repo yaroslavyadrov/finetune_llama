@@ -75,9 +75,9 @@ total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
     hf_model,
-    add_eos_token=args.add_eos_token,
-    add_bos_token=args.add_bos_token,
-    use_fast=(not args.no_use_fast)
+#    add_eos_token=args.add_eos_token,
+#    add_bos_token=args.add_bos_token,
+#    use_fast=(not args.no_use_fast)
 )
 
 model = prepare_model_for_int8_training(model)
@@ -178,4 +178,4 @@ if torch.__version__ >= "2" and sys.platform != "win32":
 
 trainer.train()
 
-model.save_pretrained(OUTPUT_DIR)
+model.save_pretrained(output_dir)
