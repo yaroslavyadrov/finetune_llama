@@ -42,6 +42,7 @@ parser.add_argument("--target_modules", type=str, default="q_proj,k_proj,v_proj,
 parser.add_argument("--data_path", type=str, default="data/data_tmp.json", help="Data path")
 parser.add_argument("--data_files", type=str, default="alpaca,stackoverflow,quora", help="Data files")
 parser.add_argument("--output_dir", type=str, default="checkpoints", help="Output directory path")
+parser.add_argument("--resume_from_checkpoint", type=str, default="checkpoints", help="Checkpoint resume path")
 
 args = parser.parse_args()
 
@@ -57,6 +58,26 @@ for x in args.data_files.split(","):
 random.shuffle(data)
 json.dump(data, open(args.data_path, "w"))
 data = load_dataset("json", data_files=args.data_path)
+
+if resume_from_checkpoint:
+    # Check the available weights and load them
+    checkpoint_name = os.path.join(
+        resume_from_checkpoint, "pytorch_model.bin"
+    )  # Full checkpoint
+    if not os.path.exists(checkpoint_name):
+        checkpoint_name = os.path.join(
+            resume_from_checkpoint, "adapter_model.bin"
+        )  # only LoRA model - LoRA config above has to fit
+        resume_from_checkpoint = (
+            False  # So the trainer won't try loading its state
+        )
+    # The two files above have a different name depending on how they were saved, but are actually the same.
+    if os.path.exists(checkpoint_name):
+        print(f"Restarting from {checkpoint_name}")
+        adapters_weights = torch.load(checkpoint_name)
+        set_peft_model_state_dict(model, adapters_weights)
+    else:
+        print(f"Checkpoint {checkpoint_name} not found")
 
 # Load Model
 device_map = "auto"
@@ -75,9 +96,9 @@ total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
     hf_model,
-#    add_eos_token=args.add_eos_token,
-#    add_bos_token=args.add_bos_token,
-#    use_fast=(not args.no_use_fast)
+    add_eos_token=args.add_eos_token,
+    add_bos_token=args.add_bos_token,
+    use_fast=(not args.no_use_fast)
 )
 
 model = prepare_model_for_int8_training(model)
@@ -176,6 +197,6 @@ model.state_dict = (
 if torch.__version__ >= "2" and sys.platform != "win32":
     model = torch.compile(model)
 
-trainer.train()
+trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
 model.save_pretrained(output_dir)
