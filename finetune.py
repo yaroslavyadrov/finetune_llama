@@ -42,6 +42,7 @@ parser.add_argument("--target_modules", type=str, default="q_proj,k_proj,v_proj,
 parser.add_argument("--data_path", type=str, default="data/data_tmp.json", help="Data path")
 parser.add_argument("--data_files", type=str, default="alpaca,stackoverflow,quora", help="Data files")
 parser.add_argument("--output_dir", type=str, default="checkpoints", help="Output directory path")
+parser.add_argument("--output_model_dir", type=str, default="/content/finetune_llama/data/model", help="Output directory path")
 parser.add_argument("--resume_from_checkpoint", type=str, default="checkpoints", help="Checkpoint resume path")
 
 args = parser.parse_args()
@@ -49,6 +50,7 @@ args = parser.parse_args()
 hf_model = "%s/%s" % (args.hf_user, args.hf_model)
 target_modules = args.target_modules.split(',')
 output_dir = args.output_dir
+output_model_dir = args.output_model_dir
 gradient_acc_steps = args.batch_size // args.micro_batch_size
 
 # Load data
@@ -93,6 +95,7 @@ model = LlamaForCausalLM.from_pretrained(
     load_in_8bit=True,
     device_map=device_map,
 )
+model.save_pretrained(output_model_dir)
 total_params, params = 0, 0
 
 tokenizer = LlamaTokenizer.from_pretrained(
