@@ -74,6 +74,8 @@ def predict(
                 except:
                     pass
     torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
     print(prompt)
     print(x)
     print("=" * 80)
@@ -178,6 +180,14 @@ with gr.Blocks(css=customCSS, theme=small_and_beautiful_theme) as demo:
                         interactive=True,
                         label="Max History Tokens",
                     )
+                    seed = gr.Slider(
+                        minimum=0,
+                        maximum=60000,
+                        value=42,
+                        step=1,
+                        interactive=True,
+                        label="Seed",
+                    )
     gr.Markdown(description)
 
     predict_args = dict(
@@ -240,10 +250,10 @@ with gr.Blocks(css=customCSS, theme=small_and_beautiful_theme) as demo:
         show_progress=True,
     )
 
-demo.title = "Baize"
+demo.title = "Sexting"
 
 if __name__ == "__main__":
     reload_javascript()
     demo.queue(concurrency_count=CONCURRENT_COUNT).launch(
-        share=False, favicon_path="./assets/favicon.ico", inbrowser=True
+        share=True, favicon_path="./assets/favicon.ico", inbrowser=True
     )
