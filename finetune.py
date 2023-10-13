@@ -53,31 +53,32 @@ gradient_acc_steps = args.batch_size // args.micro_batch_size
 
 # Load data
 data = []
-for x in args.data_files.split(","):
-    data += json.load(open("data/{}_chat_data.json".format(x)))
-random.shuffle(data)
-json.dump(data, open(args.data_path, "w"))
+# temp solution need to figure out how to load multiple datasets
+# for x in args.data_files.split(","):
+#     data += json.load(open("data/{}_chat_data.json".format(x)))
+# random.shuffle(data)
+# json.dump(data, open(args.data_path, "w"))
 data = load_dataset("json", data_files=args.data_path)
 
-if resume_from_checkpoint:
-    # Check the available weights and load them
-    checkpoint_name = os.path.join(
-        resume_from_checkpoint, "pytorch_model.bin"
-    )  # Full checkpoint
-    if not os.path.exists(checkpoint_name):
-        checkpoint_name = os.path.join(
-            resume_from_checkpoint, "adapter_model.bin"
-        )  # only LoRA model - LoRA config above has to fit
-        resume_from_checkpoint = (
-            False  # So the trainer won't try loading its state
-        )
-    # The two files above have a different name depending on how they were saved, but are actually the same.
-    if os.path.exists(checkpoint_name):
-        print(f"Restarting from {checkpoint_name}")
-        adapters_weights = torch.load(checkpoint_name)
-        set_peft_model_state_dict(model, adapters_weights)
-    else:
-        print(f"Checkpoint {checkpoint_name} not found")
+# if args.resume_from_checkpoint:
+#     # Check the available weights and load them
+#     checkpoint_name = os.path.join(
+#         resume_from_checkpoint, "pytorch_model.bin"
+#     )  # Full checkpoint
+#     if not os.path.exists(checkpoint_name):
+#         checkpoint_name = os.path.join(
+#             resume_from_checkpoint, "adapter_model.bin"
+#         )  # only LoRA model - LoRA config above has to fit
+#         resume_from_checkpoint = (
+#             False  # So the trainer won't try loading its state
+#         )
+#     # The two files above have a different name depending on how they were saved, but are actually the same.
+#     if os.path.exists(checkpoint_name):
+#         print(f"Restarting from {checkpoint_name}")
+#         adapters_weights = torch.load(checkpoint_name)
+#         set_peft_model_state_dict(model, adapters_weights)
+#     else:
+#         print(f"Checkpoint {checkpoint_name} not found")
 
 # Load Model
 device_map = "auto"
@@ -171,7 +172,7 @@ trainer = transformers.Trainer(
         per_device_train_batch_size=args.micro_batch_size,
         per_device_eval_batch_size=args.micro_batch_size,
         gradient_accumulation_steps=gradient_acc_steps,
-        warmup_steps=100,
+        warmup_steps=200,
         num_train_epochs=args.epochs,
         learning_rate=args.learning_rate,
         fp16=True,
@@ -197,6 +198,7 @@ model.state_dict = (
 if torch.__version__ >= "2" and sys.platform != "win32":
     model = torch.compile(model)
 
-trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+# trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+trainer.train()
 
 model.save_pretrained(output_dir)
