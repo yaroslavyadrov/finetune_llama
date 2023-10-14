@@ -20,7 +20,7 @@ CUDA_VISIBLE_DEVICES=0 python finetune.py \
   --lora_r 16 \
   --lora_alpha 32 \
   --lora_dropout 0.1 \
-  --val_set_size 180 \
+  --val_set_size 183 \
   --target_modules q_proj,k_proj,v_proj,down_proj,gate_proj,up_proj \
   --data_path /content/finetune_llama/data/kitsune_sexting_chat_data.json \
   --data_files sexting \
