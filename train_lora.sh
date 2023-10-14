@@ -22,6 +22,6 @@ CUDA_VISIBLE_DEVICES=0 python finetune.py \
   --lora_dropout 0.1 \
   --val_set_size 180 \
   --target_modules q_proj,k_proj,v_proj,down_proj,gate_proj,up_proj \
-  --data_path /content/finetune_llama/data/sexting_chat_data.json \
+  --data_path /content/finetune_llama/data/kitsune_sexting_chat_data.json \
   --data_files sexting \
-  --output_dir /content/finetune_llama/data/lora/finetuned_models/$LORA_CHKPTS
+  --output_dir /content/finetune_llama/data/lora/$LORA_CHKPTS
